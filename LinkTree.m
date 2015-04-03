@@ -6,7 +6,6 @@ classdef LinkTree < handle
         Body;
         Joint;
         Transform;
-        JointParams;
         Parent;
         Children = {};
     end
@@ -15,25 +14,27 @@ classdef LinkTree < handle
         % LinkTree('name') constructs empty linktree with no transform
         % LinkTree('name',[],tf) constructs empty linktree with transform
         % Otherwise, all arguments must be supplied as shown
-        function obj = LinkTree(ID,parent,tf,mass,COM_tf,inertia,joint_params)
-            obj.ID = ID;
-            if nargin==1
+        function obj = LinkTree(parent,body,joint,T)
+            
+            if nargin==0
                 obj.Transform = eye(4);
+                obj.ID = 'base';
                 return
             end
+            obj.ID = body.ID;
             obj.Parent = parent;
-            obj.Transform = tf;
+            obj.Transform = T;
             if nargin==3
                 return
             end
-            obj.Body = RigidBody(ID,mass,COM_tf,inertia);
-            obj.JointParams = joint_params;
+            obj.Body = body;
+            obj.Joint = joint;
             obj.Parent = parent;
         end
         
         % Add new link to tree
         % Parent can be either an ID or a LinkTree
-        function link = addLink(obj,ID,parent,tf,mass,COM_tf,inertia,joint_params)
+        function link = addLink(obj,parent,body,joint,T)
             %get parent node
             if isequal(class(parent),'char')
                 parent = obj.getChildByID(parent);
@@ -44,7 +45,7 @@ classdef LinkTree < handle
                 error('Invalid parent');
             end
             
-            link = LinkTree(ID,parent,tf,mass,COM_tf,inertia,joint_params);
+            link = LinkTree(parent,body,joint,T);
             parent.addChild(link);            
         end       
         
