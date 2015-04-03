@@ -1,3 +1,5 @@
+%Need to fix transform function
+
 classdef LinkTree < handle
     properties
         ID;
@@ -39,8 +41,7 @@ classdef LinkTree < handle
             
             %Validate parent
             if isempty(parent)
-                disp('Invalid parent');
-                return;
+                error('Invalid parent');
             end
             
             link = LinkTree(ID,parent,tf,mass,COM_tf,inertia,joint_params);
@@ -78,39 +79,38 @@ classdef LinkTree < handle
         
         %Get transformation to this from ancestor
         function trans = transformFromAncestor(obj,ancestor)
-            trans = obj.Transform;
-            next_node = obj.Parent;
+            trans = 1; %use eye(4) instead?
+            next_node = obj;
             while next_node~=ancestor;
-                trans = next_node.Transform*trans; %figure out direction
+                trans = next_node.Transform*trans; 
                 next_node = next_node.Parent;
             end
         end
         
         %Transform from this link to another
-        function transform = transformTo(obj,target)
-            if obj==target
-                transform = eye(4);
-                return
-            end
-            
-            baseParents = {target};
-            next_node = obj.Parent;
+        function transform = transformTo(obj,target)            
+            ancestors = {target};            
+            next_node = obj;
            
-            while ~isempty(next_node)
-                baseParents{end+1} = next_node;
-                next_node = next_node.Parent;
+            k=1;
+            %while next_node not in ancestors
+            while ~isempty(next_node) && isempty(find([ancestors{:}] == next_node, 1))
+                ancestors{end+1} = next_node; %add node to end
+                next_node = ancestors{end-k}.Parent;
+                if isempty(next_node)
+                    k=k-1;
+                    next_node = ancestors{end}.Parent;
+                end
             end
             
-            next_node = target;
-            
-            while isempty(find([baseParents{:}] == next_node, 1))
-                next_node = next_node.Parent;
+            if isempty(next_node)
+                error('No transfomation found between frames')
             end
             
             common_ancestor = next_node;
             
-            trans1 = transformFromAncestor(obj,common_ancestor);
-            trans2 = transformFromAncestor(target,common_ancestor);
+            trans1 = obj.transformFromAncestor(common_ancestor);
+            trans2 = target.transformFromAncestor(common_ancestor);
             
             transform = trans1\trans2; %equivalent to inv(trans1)*trans2
         end
