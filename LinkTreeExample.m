@@ -1,7 +1,7 @@
 % Transform function needs to be fixed
 
 % normally, just do LinkTree('base')
-tree = LinkTreeNew();
+tree = LinkTree();
 
 armBody = RigidBody('arm',2,[1 0 0]',eye(3));
 jointParam.stiffness = 'k_arm';

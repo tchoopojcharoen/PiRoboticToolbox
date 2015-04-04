@@ -8,10 +8,8 @@ classdef Manipulator
     properties
         Environment % Gravity , IsSym
         DHParameters   % DH
+        DynamicParameters % Matrices -> D,C,G,B,K , TO DO : should return mass, and com of entire
         LinkList = {};
-        JointList = {};
-        FrameList;
-        DynamicParameters % Matrices -> D,C,G,B,K
         State       % Joint -> (q,qd,qdd)
     end
     
@@ -43,41 +41,41 @@ classdef Manipulator
             obj.State = state;
             
             % frames for serial manipulator
-            tree = FrameTree;
-            parent = 1;
+            tree = LinkTree;
+            parent = 'base';
             
             for i = 1:N
+                
+                currentLink = sprintf('Link%d',i);
+                
+                % Transform for DH convention
                 theta = DH(i,1);
                 d = DH(i,2);
                 a = DH(i,3);
                 alpha = DH(i,4);
                 T = DHtransform(obj,theta,d,a,alpha);
-                addFrame(tree,parent,T);
-                parent = parent + 1;
+                
+                % single state
+                tempState.q = state.q(i);
+                tempState.qd = state.qd(i);
+                tempState.qdd = state.qdd(i);
+                
+                % body
+                body = RigidBody(currentLink,mass(i),centerOfMass(:,i),inertia(:,:,i));
+                
+                % joint
+                jointParam.stiffness = 0; % for now
+                jointParam.damping = 0; % for now
+
+                joint = Joint(rho(i),parent,currentLink,tempState,jointParam);
+                
+                % add link
+                tree.addLink(parent,body,joint,T);
+                
+                parent = currentLink;
             end
-            obj.FrameList = tree;
-            
-            % LinkList & Joint List for any robot
-            tempLinkList = cell(1,N);
-            tempJointList = cell(1,N);
-            for i = 1:N,
-                jointParam.Stiffness = 0; % for now
-                jointParam.Damping = 0; % for now
-                
-                singleState.q = state.q(i);
-                singleState.qd = state.qd(i);
-                singleState.qdd = state.qdd(i);
-                
-                joint = Joint(rho(i),i-1,i,singleState,jointParam);
-                link = RigidBody(i,mass(i),centerOfMass(:,i),inertia(:,:,i));
-                
-                tempLinkList{i} = link;
-                tempJointList{i} = joint;
-            end
-            
-            obj.LinkList = tempLinkList;
-            obj.JointList = tempJointList;
-            
+            obj.LinkList = tree;
+
             
             dynamicParam.Inertia = obj.inertiaMatrix;
             dynamicParam.Coriolis = obj.coriolisMatrix;
@@ -104,10 +102,12 @@ classdef Manipulator
                 I = zeros(3,3,N);
             end
             
-            for i = 1:N
-                link = obj.LinkList{i};
-                m(i) = link.Mass;
-                I(:,:,i) = link.Inertia;
+            listID = obj.LinkList.getListLinkID;
+            numLink = numel(listID);
+            for i = 2:numLink, % not including base/ ground
+                link = obj.LinkList.getChildByID(listID{i});
+                m(i-1) = link.Body.Mass;
+                I(:,:,i-1) = link.Body.Inertia;
             end
             
             
@@ -116,6 +116,8 @@ classdef Manipulator
             else
                 D = zeros(N);
             end
+            
+            % for each rigid body in the system
             
             for i = 1:N
                 J_v = obj.linearJacobianCOM(i);
@@ -173,10 +175,12 @@ classdef Manipulator
                 m = sym(zeros(1,n));
                 I = sym(zeros(3,3,n));
                 
-                for idx = 1:n
-                    link = obj.LinkList{idx};
-                    m(idx) = link.Mass;
-                    I(:,:,idx) = link.Inertia;
+                listID = obj.LinkList.getListLinkID;
+                numLink = numel(listID);
+                for idx = 2:numLink, % not including base/ ground
+                    link = obj.LinkList.getChildByID(listID{idx});
+                    m(idx-1) = link.Body.Mass;
+                    I(:,:,idx-1) = link.Body.Inertia;
                 end
                 
                 D = sym(zeros(n));
@@ -206,9 +210,11 @@ classdef Manipulator
                 dh_table = obj.DHParameters;
                 n = obj.degreeOfFreedom;
                 rho = zeros(1,n);
-                for idx = 1:n
-                    joint = obj.JointList{idx};
-                    rho(idx) = joint.Type;
+                listID = obj.LinkList.getListLinkID;
+                numLink = numel(listID);
+                for idx = 2:numLink, % not including base/ ground
+                    link = obj.LinkList.getChildByID(listID{idx});
+                    rho(:,idx-1) = link.Joint.Type;
                 end
                                   
                 J_w = sym(zeros(3,n));
@@ -238,9 +244,11 @@ classdef Manipulator
                 
                 n = obj.degreeOfFreedom;
                 cm = sym(zeros(3,n));
-                for idx = 1:n
-                    link = obj.LinkList{idx};
-                    cm(:,idx) = link.CenterOfMass;
+                listID = obj.LinkList.getListLinkID;
+                numLink = numel(listID);
+                for idx = 2:numLink, % not including base/ ground
+                    link = obj.LinkList.getChildByID(listID{idx});
+                    cm(:,idx-1) = link.Body.CenterOfMass;
                 end
                 
                 T = sym(eye(4));
@@ -276,9 +284,12 @@ classdef Manipulator
                 
                 N = obj.degreeOfFreedom;
                 m = sym(zeros(1,N));
-                for i = 1:N
-                    link = obj.LinkList{i};
-                    m(i) = link.Mass;
+                
+                listID = obj.LinkList.getListLinkID;
+                numLink = numel(listID);
+                for i = 2:numLink, % not including base/ ground
+                    link = obj.LinkList.getChildByID(listID{i});
+                    m(i-1) = link.Body.Mass;
                 end
                 
                 P = sym(0);
@@ -411,9 +422,11 @@ end
                 cm = zeros(3,N);
             end
             
-            for idx = 1:N
-                link = obj.LinkList{idx};
-                cm(:,idx) = link.CenterOfMass;
+            listID = obj.LinkList.getListLinkID;
+            numLink = numel(listID);
+            for idx = 2:numLink, % not including base/ ground
+                link = obj.LinkList.getChildByID(listID{idx});
+                cm(:,idx-1) = link.Body.CenterOfMass;
             end
             
             T = sym(eye(4));
@@ -453,11 +466,13 @@ end
             dh_table = obj.DHParameters;
             N = obj.degreeOfFreedom;
             rho = zeros(1,N);
-            for i = 1:N
-                joint = obj.JointList{i};
-                rho(i) = joint.Type;
-            end
-                        
+            
+            listID = obj.LinkList.getListLinkID;
+            numLink = numel(listID);
+            for idx = 2:numLink, % not including base/ ground
+                link = obj.LinkList.getChildByID(listID{idx});
+                rho(:,idx-1) = link.Joint.Type;
+            end                       
             
             if obj.Environment.IsSym
                 J_w = sym(zeros(3,N));
@@ -500,10 +515,15 @@ end
             else
                 cm = zeros(3,N);
             end
-            for i = 1:N
-                link = obj.LinkList{i};
-                cm(:,i) = link.CenterOfMass;
+            
+            listID = obj.LinkList.getListLinkID;
+            numLink = numel(listID);
+            for idx = 2:numLink, % not including base/ ground
+                link = obj.LinkList.getChildByID(listID{idx});
+                cm(:,idx-1) = link.Body.CenterOfMass;
             end
+            
+            % transform
             
             if obj.Environment.IsSym
                 T = sym(eye(4));

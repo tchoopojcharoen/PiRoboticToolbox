@@ -5,6 +5,7 @@ classdef LinkTree < handle
         ID;
         Body;
         Joint;
+        
         Transform;
         Parent;
         Children = {};
@@ -45,7 +46,8 @@ classdef LinkTree < handle
                 error('Invalid parent');
             end
             
-            link = LinkTree(parent,body,joint,T);
+            link = LinkTree(parent,body,joint,T); 
+            
             parent.addChild(link);            
         end       
         
@@ -69,6 +71,23 @@ classdef LinkTree < handle
                     return
                 end
             end
+        end
+        
+        function listID = getListLinkID(obj,varargin)
+            
+            if isempty(varargin)
+                listID = {};
+            else
+                listID = varargin{1};
+            end
+            listID{end+1} = obj.ID;
+            
+            if ~isempty(obj.Children)
+                for i = 1:numel(obj.Children)
+                    listID = getListLinkID(obj.Children{i},listID);
+                end
+            end
+            % TO DO : also display the actual tree
         end
         
         %Transform between two links by ID
