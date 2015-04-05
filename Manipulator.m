@@ -160,8 +160,8 @@ classdef Manipulator
             % substitute for numeric values
             if ~obj.Environment.IsSym
                 
-                C = subs(C,q,obj.State.Joint.q');
-                C = subs(C,qd,obj.State.Joint.qd');
+                C = subs(C,q,obj.State.q);
+                C = subs(C,qd,obj.State.qd);
                 C = eval(C);
             else
                 C = simplify(C);
@@ -273,7 +273,7 @@ classdef Manipulator
             G = jacobian(P,q)';
             % substitute for numeric values
             if ~obj.Environment.IsSym
-                G = subs(G,q,obj.State.Joint.q');
+                G = subs(G,q,obj.State.q);
                 G = eval(G);
             end
             function P = symbolicPotentialEnergy(obj)
@@ -347,7 +347,7 @@ classdef Manipulator
                         alpha = dh_table(j,4);
                         T = T*obj.DHtransform(theta,d,a,alpha);
                     end
-                    T = subs(T,q,obj.State.Joint.q');
+                    T = subs(T,q,obj.State.q);
                     T_intermediate(:,:,i) = T;
                 end
 
@@ -455,7 +455,7 @@ end
             J_v = simplify(jacobian(p,q));
             
             if ~obj.Environment.IsSym
-                J_v = subs(J_v,q,obj.State.Joint.q');
+                J_v = subs(J_v,q,obj.State.q);
             end
             
         end
