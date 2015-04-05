@@ -19,7 +19,7 @@ inertia(:,:,6) = [123E-6, 0, 0; 0 123E-6 0; 0 0 13E-6;];
 
 rho = [1 1 1 1 0 1];
 gravity_vector = [0; -9.81; 0];
-isSym = 1; %ERROR IF 0
+isSym = 0; %ERROR IF 0
 
 Puma = Manipulator(DH,mass,centerOfMass,inertia,rho,gravity_vector,isSym)
 
