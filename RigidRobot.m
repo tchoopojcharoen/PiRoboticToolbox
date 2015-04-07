@@ -25,8 +25,8 @@ classdef (Abstract) RigidRobot < handle
             m = 0;
             chain = obj.KinematicChain;
             ID = chain.getListIDRigidBody;
-            for i = 1:numel(ID)%each body i in the chain
-                body = chain.getBodyFromID(ID{i});
+            for i = 1:numel(ID)-1%each body i in the chain
+                body = chain.getBodyFromID(ID{i+1});
                 m = m + body.Mass;
             end
         end    
@@ -40,11 +40,13 @@ classdef (Abstract) RigidRobot < handle
                 body = chain.getBodyFromID(ID{i+1});
                 mass = body.Mass;
                 com = body.CenterOfMass;
+                T = body.Pose.Transformation;
+                com_base = simplify([eye(3) zeros(3,1)]*T*[com;1]);
                 m = m + mass;
-                cm = cm + mass*com;
+                cm = cm + mass*com_base;
             end
             
-            cm = cm/m;
+            cm = simplify(cm/m);
             
         end      
         function T = kineticEnergy(obj)
