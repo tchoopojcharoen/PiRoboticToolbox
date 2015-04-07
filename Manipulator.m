@@ -1,10 +1,5 @@
 classdef Manipulator < handle
-    % call the following for example
-    % TwoDOFSpec;
-    % TwoDOF = Robot(DH_table,m,cm,I,rho,gravity_vector,1);
-    % TwoDOF.State.Matrix.Inertia
-    % TwoDOF.State.Matrix.Coriolis
-    % TwoDOF.State.Matrix.Gravity
+
     properties
         Environment % Gravity , IsSym
         DHParameters   % DH
