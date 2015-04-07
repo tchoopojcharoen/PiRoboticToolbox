@@ -69,8 +69,8 @@ classdef (Abstract) RigidRobot < handle
                 m = body.Mass;
                 gravity_vector = obj.Environment.Gravity;
                 pose = body.Pose;
-                y = pose.Translation(2);
-                V_i = m*gravity_vector*y;
+                rc = pose.Translation;
+                V_i = m*gravity_vector'*rc;
                 V = V + V_i;
             end
         end
