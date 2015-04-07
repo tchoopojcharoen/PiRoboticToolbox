@@ -28,6 +28,7 @@ classdef Manipulator < handle
                 qd = zeros(N,1);
                 qdd = zeros(N,1);
             end
+            qsym  = obj.symbolicState; % for jacobian/ should also appear in DH
             
             state.q = q;
             state.qd = qd;
@@ -88,7 +89,7 @@ classdef Manipulator < handle
                 % jacobian
                 J_v = linearJacobianCOM(obj,i);
                 J_w = angularJacobian(obj,i);
-                J = Jacobian(J_v,J_w);
+                J = Jacobian(J_v,J_w,qsym);
                 % update
                 link.Body.Pose = pose;
                 link.Body.Jacobian = J;
@@ -127,18 +128,8 @@ classdef Manipulator < handle
                 % get parameters
                 link = obj.LinkList.getChildByID(listID{i+1});
                 body = link.Body;
-                if isSymExplicit % for calculating coriolis
-                    m = link.Body.Mass;
-                    I = link.Body.Inertia;
-                    J_v = linearJacobianCOM(obj,i,'symbolic');
-                    J_w = angularJacobian(obj,i,'symbolic');
-                    R = Rinertial(obj,i,'symbolic');
-                    linear_term = m*(J_v')*J_v;
-                    angular_term = J_w'*R*I*R'*J_w;
-                    D_i = linear_term + angular_term;
-                else % any case : numeric + symbolic
-                    D_i = body.generalizedInertiaMatrix;
-                end
+                
+                D_i = body.generalizedInertiaMatrix;
                 D = D + D_i;
                 
             end
@@ -146,12 +137,17 @@ classdef Manipulator < handle
             if obj.Environment.IsSym || isSymExplicit
                 D = simplify(D);
             else
+                [qsym,qdsym,~] = obj.symbolicState;
+                D = subs(D,qsym,obj.State.q);
+                D = subs(D,qdsym,obj.State.qd);
                 D = eval(D);
             end
         end
         function C = coriolisMatrix(obj)
             %return nxn generalized inertia Coriolis matrix
             
+            % one needs symbolic jacobian to differentiate
+            % jacobian need to be defined with symbolic q 
             N = obj.degreeOfFreedom;
             [q,qd,~] = obj.symbolicState;
             
@@ -227,13 +223,17 @@ classdef Manipulator < handle
             state.qdd = reshape(qdd,N,1);
             
             obj.State = state;
-            for i = 1:N,
-                joint = obj.JointList{i};
-                joint.State.q = state.q(i); % TO DO :have to change the name
-                joint.State.qd = state.qd(i); % TO DO :have to change the name
-                joint.State.qdd = state.qdd(i); % TO DO :have to change the name
+            
+            listID = obj.LinkList.getListLinkID;
+            numLink = numel(listID);
+            
+            for i = 1:numLink-1,
                 
-                obj.JointList{i} = joint;
+                link = obj.LinkList.getChildByID(listID{i+1});
+                link.Joint.State.q = state.q(i);
+                link.Joint.State.qd = state.qd(i);
+                link.Joint.State.qdd = state.qdd(i);
+                
             end
             
             dynamicParam.Inertia = obj.inertiaMatrix;
@@ -365,33 +365,22 @@ end
             p = T(1:3,4);
             p = simplify(p);
         end
-        function J_v = linearJacobianCOM(obj,i,varargin)
+        function J_v = linearJacobianCOM(obj,i)
             %return 3xn linear Jacobian matrix at the center of mass of ith link
             
             % TO DO:
-            % i the future, should take an ID of rigid body, and fixed
+            % in the future, should take an ID of rigid body, and fixed
             % transformation and return linear Jacobian to the point
             
             [q,~,~] = obj.symbolicState;
             p = obj.ForwardKinematicsCOM(i);
             J_v = simplify(jacobian(p,q));
             
-            if ~isempty(varargin)
-                isSymExplicit = strcmp('symbolic',varargin{1});
-            else
-                isSymExplicit = false;
-            end
-            
-            if ~obj.Environment.IsSym && ~isSymExplicit
-                J_v = subs(J_v,q,obj.State.q);
-            end
-            
         end     
-        function J_w = angularJacobian(obj,i,varargin)
+        function J_w = angularJacobian(obj,i)
             %return 3xn angular Jacobian matrix at the center of mass of ith link
             
             % get parameters
-            [q,~,~] = obj.symbolicState;
             dh_table = obj.DHParameters;
             N = obj.degreeOfFreedom;
             rho = zeros(1,N);
@@ -403,19 +392,11 @@ end
                 rho(:,idx) = link.Joint.Type;
             end                       
             
-            if obj.Environment.IsSym
-                J_w = sym(zeros(3,N));
-            else
-                J_w = zeros(3,N);
-            end
+            J_w = sym(zeros(3,N));
+            
             
             for k = 1:i
-                
-                if obj.Environment.IsSym
-                    T = sym(eye(4));
-                else
-                    T = eye(4);
-                end
+                T = sym(eye(4));
                 
                 for j = 1:i
                     theta = dh_table(j,1);
@@ -424,25 +405,8 @@ end
                     alpha = dh_table(j,4);
                     T = T*obj.DHtransform(theta,d,a,alpha);
                 end
-                J_w(:,k) = rho(k)*T(1:3,3);
-                if obj.Environment.IsSym
-                    J_w(:,k) = simplify(J_w(:,k));
-                end
-                
-                
-                if ~isempty(varargin)
-                    isSymExplicit = strcmp('symbolic',varargin{1});
-                else
-                    isSymExplicit = false;
-                end
-                
-                if obj.Environment.IsSym || isSymExplicit
-                    J_w(:,k) = simplify(J_w(:,k));
-                else
-                    J_w(:,k) = subs(J_w(:,k),q,obj.State.q);
-                end
-                
-                
+                J_w(:,k) = rho(k)*T(1:3,3);                
+                J_w(:,k) = simplify(J_w(:,k)); 
             end
             
         end
