@@ -300,7 +300,7 @@ end
                 
             end
             T = T*obj.transl(cm(:,i),'all');
-            R = T(1:3,1:3);
+            R = simplify(T(1:3,1:3));
             
         end
     end

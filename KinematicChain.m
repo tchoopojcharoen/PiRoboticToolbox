@@ -2,12 +2,14 @@ classdef KinematicChain < handle
     
     properties
         Tree % for wrapper
+        BodyID;
     end
     
     methods
         function obj = KinematicChain(tree)
             % constructor
             obj.Tree = tree;
+            obj.BodyID = getListIDRigidBody(obj);
         end
         
         function listID = getListIDRigidBody(obj,varargin)
