@@ -62,7 +62,8 @@ classdef (Abstract) RigidRobot < handle
             end
         end        
         function V = potentialEnergy(obj) % gravity + spring
-            % no spring for now
+            % no spring for now 
+            
             chain = obj.KinematicChain;
             ID = chain.getListIDRigidBody;
             V = 0;
@@ -155,29 +156,12 @@ classdef (Abstract) RigidRobot < handle
         function G = gravityMatrix(obj)
             N = obj.DegreeOfFreedom;
             [q,~,~] = RigidRobot.symbolicState(N);
-            P = symbolicPotentialEnergy(obj);
+            P = potentialEnergy(obj);
             G = jacobian(P,q)';
             % substitute for numeric values
             if ~obj.Environment.IsSym
                 G = subs(G,q,obj.State.q);
                 G = eval(G);
-            end
-            function P = symbolicPotentialEnergy(obj)
-                % return symbolic potential energy of the robot
-                
-                % get parameters
-                gravity_vector = obj.Environment.Gravity;
-                
-                listID = obj.KinematicChain.Tree.getListLinkID;
-                numLink = numel(listID);
-                P = sym(0);
-                for i = 1:numLink-1, % not including base/ ground
-                    link = obj.KinematicChain.Tree.getChildByID(listID{i+1});
-                    body = link.Body;
-                    m = body.Mass;
-                    rc = body.Pose.Translation;
-                    P = P + m*gravity_vector'*rc;
-                end
             end
         end
         function updateState(obj,q,qd,qdd)
