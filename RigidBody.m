@@ -44,7 +44,6 @@ classdef RigidBody < handle
                 angular_term = J_w'*R*I*R'*J_w;
             end
         end
-
         
     end
     

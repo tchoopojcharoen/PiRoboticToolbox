@@ -99,19 +99,22 @@ classdef Manipulator < handle
             dynamicParam.Coriolis = obj.coriolisMatrix;
             dynamicParam.Gravity = obj.gravityMatrix;
             obj.DynamicParameters = dynamicParam;
-                            
-                
-            
         end
         function N = degreeOfFreedom(obj)
             N = size(obj.DHParameters,1);
         end
-        function D = inertiaMatrix(obj)
+        function D = inertiaMatrix(obj,varargin)
             %return nxn generalized inertia matrix
             
             N = obj.degreeOfFreedom;
-             
-            if obj.Environment.IsSym
+            
+            if ~isempty(varargin)
+                isSymExplicit = strcmp('symbolic',varargin{1});
+            else
+                isSymExplicit = false;
+            end 
+            
+            if obj.Environment.IsSym || isSymExplicit
                 D = sym(zeros(N));    
             else
                 D = zeros(N);
@@ -124,12 +127,23 @@ classdef Manipulator < handle
                 % get parameters
                 link = obj.LinkList.getChildByID(listID{i+1});
                 body = link.Body;
-                D_i = body.generalizedInertiaMatrix;
+                if isSymExplicit % for calculating coriolis
+                    m = link.Body.Mass;
+                    I = link.Body.Inertia;
+                    J_v = linearJacobianCOM(obj,i,'symbolic');
+                    J_w = angularJacobian(obj,i,'symbolic');
+                    R = Rinertial(obj,i,'symbolic');
+                    linear_term = m*(J_v')*J_v;
+                    angular_term = J_w'*R*I*R'*J_w;
+                    D_i = linear_term + angular_term;
+                else % any case : numeric + symbolic
+                    D_i = body.generalizedInertiaMatrix;
+                end
                 D = D + D_i;
                 
             end
             
-            if obj.Environment.IsSym
+            if obj.Environment.IsSym || isSymExplicit
                 D = simplify(D);
             else
                 D = eval(D);
@@ -141,7 +155,7 @@ classdef Manipulator < handle
             N = obj.degreeOfFreedom;
             [q,qd,~] = obj.symbolicState;
             
-            D = symbolicInertiaMatrix(obj);
+            D = inertiaMatrix(obj,'symbolic');
             
             C = sym(zeros(N));
             c_kj = sym(zeros(N));
@@ -169,104 +183,6 @@ classdef Manipulator < handle
                 C = simplify(C);
             end
             
-            % nested help function
-            function D = symbolicInertiaMatrix(obj)
-                %return nxn symbolic generalized inertia matrix
-                n = obj.degreeOfFreedom;
-                % get parameters
-                m = sym(zeros(1,n));
-                I = sym(zeros(3,3,n));
-                
-                listID = obj.LinkList.getListLinkID;
-                numLink = numel(listID);
-                for idx = 1:numLink-1, % not including base/ ground
-                    link = obj.LinkList.getChildByID(listID{idx+1});
-                    m(idx) = link.Body.Mass;
-                    I(:,:,idx) = link.Body.Inertia;
-                end
-                
-                D = sym(zeros(n));
-                for idx = 1:n
-                    J_v = symbolicLinearJacobian(obj,idx);
-                    J_w = symbolicAngularJacobian(obj,idx);
-                    R = symbolicRinertial(obj,idx);
-                    linear_term = m(idx)*(J_v')*J_v;
-                    angular_term = J_w'*R*I(:,:,idx)*R'*J_w;
-                    D = D + linear_term + angular_term;
-                end
-                
-                D = simplify(D);
-                
-            end
-            function J_v = symbolicLinearJacobian(obj,i)
-                %return 3xn linear Jacobian matrix at the center of mass of ith link
-                
-                [qv,~,~] = obj.symbolicState;
-                p = obj.ForwardKinematicsCOM(i);
-                J_v = simplify(jacobian(p,qv));
-            end
-            function J_w = symbolicAngularJacobian(obj,i)
-                %return 3xn angular Jacobian matrix at the center of mass of ith link
-                
-                % get parameters
-                dh_table = obj.DHParameters;
-                n = obj.degreeOfFreedom;
-                rho = zeros(1,n);
-                listID = obj.LinkList.getListLinkID;
-                numLink = numel(listID);
-                for idx = 1:numLink-1, % not including base/ ground
-                    link = obj.LinkList.getChildByID(listID{idx+1});
-                    rho(:,idx) = link.Joint.Type;
-                end
-                                  
-                J_w = sym(zeros(3,n));
-                
-                for kdx = 1:i
-                    
-                    T = sym(eye(4));
-                    
-                    for jdx = 1:i
-                        theta = dh_table(jdx,1);
-                        d = dh_table(jdx,2);
-                        a = dh_table(jdx,3);
-                        alpha = dh_table(jdx,4);
-                        T = T*obj.DHtransform(theta,d,a,alpha);
-                    end
-                    J_w(:,kdx) = rho(kdx)*T(1:3,3);
-                    J_w(:,kdx) = simplify(J_w(:,kdx));
-                end
-            end
-            function R = symbolicRinertial(obj,i)
-                %oriantation transformation from the ith body attached fram and the
-                %inertial (global) frame
-                
-                % get parameters
-                dh_table = obj.DHParameters;
-                
-                
-                n = obj.degreeOfFreedom;
-                cm = sym(zeros(3,n));
-                listID = obj.LinkList.getListLinkID;
-                numLink = numel(listID);
-                for idx = 1:numLink-1, % not including base/ ground
-                    link = obj.LinkList.getChildByID(listID{idx+1});
-                    cm(:,idx) = link.Body.CenterOfMass;
-                end
-                
-                T = sym(eye(4));
-                
-                for jdx = 1:i
-                    theta = dh_table(jdx,1);
-                    d = dh_table(jdx,2);
-                    a = dh_table(jdx,3);
-                    alpha = dh_table(jdx,4);
-                    T = T*obj.DHtransform(theta,d,a,alpha);
-                    
-                end
-                T = T*obj.transl(cm(:,i),'all'); % x,y, and z
-                R = T(1:3,1:3);
-                
-            end
         end
         function G = gravityMatrix(obj)
             
@@ -449,22 +365,33 @@ end
             p = T(1:3,4);
             p = simplify(p);
         end
-        function J_v = linearJacobianCOM(obj,i)
+        function J_v = linearJacobianCOM(obj,i,varargin)
             %return 3xn linear Jacobian matrix at the center of mass of ith link
+            
+            % TO DO:
+            % i the future, should take an ID of rigid body, and fixed
+            % transformation and return linear Jacobian to the point
             
             [q,~,~] = obj.symbolicState;
             p = obj.ForwardKinematicsCOM(i);
             J_v = simplify(jacobian(p,q));
             
-            if ~obj.Environment.IsSym
+            if ~isempty(varargin)
+                isSymExplicit = strcmp('symbolic',varargin{1});
+            else
+                isSymExplicit = false;
+            end
+            
+            if ~obj.Environment.IsSym && ~isSymExplicit
                 J_v = subs(J_v,q,obj.State.q);
             end
             
-        end
-        function J_w = angularJacobian(obj,i)
+        end     
+        function J_w = angularJacobian(obj,i,varargin)
             %return 3xn angular Jacobian matrix at the center of mass of ith link
             
             % get parameters
+            [q,~,~] = obj.symbolicState;
             dh_table = obj.DHParameters;
             N = obj.degreeOfFreedom;
             rho = zeros(1,N);
@@ -502,17 +429,36 @@ end
                     J_w(:,k) = simplify(J_w(:,k));
                 end
                 
+                
+                if ~isempty(varargin)
+                    isSymExplicit = strcmp('symbolic',varargin{1});
+                else
+                    isSymExplicit = false;
+                end
+                
+                if obj.Environment.IsSym || isSymExplicit
+                    J_w(:,k) = simplify(J_w(:,k));
+                else
+                    J_w(:,k) = subs(J_w(:,k),q,obj.State.q);
+                end
+                
+                
             end
             
         end
-        function R = Rinertial(obj,i)
+        function R = Rinertial(obj,i,varargin)
             %oriantation transformation from the ith body attached fram and the
             %inertial (global) frame
             
+            if ~isempty(varargin)
+                isSymExplicit = strcmp('symbolic',varargin{1});
+            else
+                isSymExplicit = false;
+            end            
             % get parameters
             dh_table = obj.DHParameters;
             N = obj.degreeOfFreedom;
-            if obj.Environment.IsSym
+            if obj.Environment.IsSym || isSymExplicit
                 cm = sym(zeros(3,N));
             else
                 cm = zeros(3,N);
@@ -527,7 +473,7 @@ end
             
             % transform
             
-            if obj.Environment.IsSym
+            if obj.Environment.IsSym || isSymExplicit
                 T = sym(eye(4));
             else
                 T = eye(4);
