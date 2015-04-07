@@ -1,28 +1,25 @@
 classdef (Abstract) RigidRobot < handle
     
     properties
-        Environment;  % Gravity , IsSym
+        DegreeOfFreedom;
+        State; % q, qd, qdd
         KinematicChain; % graph with body as a node and joint as an edge
         %TotalMass; % total mass of the entire robot
-        State; % q, qd, qdd
+        DynamicParameters;
+        Environment;  % Gravity , IsSym
     end
     
     methods
-        function obj = RigidRobot(kinematicChain,gravity_vector,isSym)
+        function obj = RigidRobot(state,kinematicChain,gravity_vector,isSym)
             
             % environment
             env.Gravity = gravity_vector;
             env.IsSym = isSym;
             obj.Environment = env;
-            
+            obj.State = state;
             obj.KinematicChain = kinematicChain;
-        end
-        function N = degreeOfFreedom(obj)
-            
-            % for now, use serial manipulator
-            % use mobility equation inthe future
             listID = obj.KinematicChain.Tree.getListLinkID;
-            N = numel(listID)-1;
+            obj.DegreeOfFreedom = numel(listID)-1;
         end
         function m = mass(obj)
             m = 0;
@@ -80,7 +77,7 @@ classdef (Abstract) RigidRobot < handle
         function D = inertiaMatrix(obj,varargin)
             %return nxn generalized inertia matrix
             
-            N = obj.degreeOfFreedom;
+            N = obj.DegreeOfFreedom;
             
             if ~isempty(varargin)
                 isSymExplicit = strcmp('symbolic',varargin{1});
@@ -94,12 +91,12 @@ classdef (Abstract) RigidRobot < handle
                 D = zeros(N);
             end
             
-            listID = obj.LinkList.getListLinkID;
+            listID = obj.KinematicChain.Tree.getListLinkID;
             numLink = numel(listID);
             for i = 1:numLink-1, % not including base/ ground
                 
                 % get parameters
-                link = obj.LinkList.getChildByID(listID{i+1});
+                link = obj.KinematicChain.Tree.getChildByID(listID{i+1});
                 body = link.Body;
                 
                 D_i = body.generalizedInertiaMatrix;
@@ -110,7 +107,7 @@ classdef (Abstract) RigidRobot < handle
             if obj.Environment.IsSym || isSymExplicit
                 D = simplify(D);
             else
-                [qsym,qdsym,~] = obj.symbolicState;
+                [qsym,qdsym,~] = RigidRobot.symbolicState(N);
                 D = subs(D,qsym,obj.State.q);
                 D = subs(D,qdsym,obj.State.qd);
                 D = eval(D);
@@ -121,8 +118,8 @@ classdef (Abstract) RigidRobot < handle
             
             % one needs symbolic jacobian to differentiate
             % jacobian need to be defined with symbolic q 
-            N = obj.degreeOfFreedom;
-            [q,qd,~] = obj.symbolicState;
+            N = obj.DegreeOfFreedom;
+            [q,qd,~] = RigidRobot.symbolicState(N);
             
             D = inertiaMatrix(obj,'symbolic');
             
@@ -154,8 +151,8 @@ classdef (Abstract) RigidRobot < handle
             
         end
         function G = gravityMatrix(obj)
-            
-            [q,~,~] = obj.symbolicState;
+            N = obj.DegreeOfFreedom;
+            [q,~,~] = RigidRobot.symbolicState(N);
             P = symbolicPotentialEnergy(obj);
             G = jacobian(P,q)';
             % substitute for numeric values
@@ -169,20 +166,15 @@ classdef (Abstract) RigidRobot < handle
                 % get parameters
                 gravity_vector = obj.Environment.Gravity;
                 
-                N = obj.degreeOfFreedom;
-                m = sym(zeros(1,N));
-                
-                listID = obj.LinkList.getListLinkID;
+                listID = obj.KinematicChain.Tree.getListLinkID;
                 numLink = numel(listID);
-                for i = 1:numLink-1, % not including base/ ground
-                    link = obj.LinkList.getChildByID(listID{i+1});
-                    m(i) = link.Body.Mass;
-                end
-                % TO DO : combine for loops
                 P = sym(0);
-                for i = 1:N
-                    rc = obj.ForwardKinematicsCOM(i);
-                    P = P + m(i)*gravity_vector'*rc;
+                for i = 1:numLink-1, % not including base/ ground
+                    link = obj.KinematicChain.Tree.getChildByID(listID{i+1});
+                    body = link.Body;
+                    m = body.Mass;
+                    rc = body.Pose.Translation;
+                    P = P + m*gravity_vector'*rc;
                 end
             end
         end
@@ -190,19 +182,19 @@ classdef (Abstract) RigidRobot < handle
             % update D,C,G matrices with corresponding numeric values of
             % q,qd, and qdd
             
-            N = obj.degreeOfFreedom;
+            N = obj.DegreeOfFreedom;
             state.q = reshape(q,N,1);
             state.qd = reshape(qd,N,1);
             state.qdd = reshape(qdd,N,1);
             
             obj.State = state;
             
-            listID = obj.LinkList.getListLinkID;
+            listID = obj.KinematicChain.Tree.getListLinkID;
             numLink = numel(listID);
             
             for i = 1:numLink-1,
                 
-                link = obj.LinkList.getChildByID(listID{i+1});
+                link = obj.KinematicChain.Tree.getChildByID(listID{i+1});
                 link.Joint.State.q = state.q(i);
                 link.Joint.State.qd = state.qd(i);
                 link.Joint.State.qdd = state.qdd(i);
@@ -216,11 +208,12 @@ classdef (Abstract) RigidRobot < handle
             obj.DynamicParameters = dynamicParam;
             
         end
-        function [q,qd,qdd] = symbolicState(obj)
+    end
+    methods (Static)
+        function [q,qd,qdd] = symbolicState(N)
             % TO DO :
             % http://www.mathworks.com/matlabcentral/answers/
             % 242-how-to-generate-symbolic-variables-dynamically-at-run-time
-            N = obj.degreeOfFreedom;
 
             q = sym('q',[N 1]);
             qd = sym('qd',[N 1]);
