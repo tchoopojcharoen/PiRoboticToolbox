@@ -11,13 +11,13 @@ classdef Manipulator < RigidRobot
             N = size(DH,1);
             
             if isSym
-                [q,qd,qdd] = Manipulator.symbolicState(N);
+                [q,qd,qdd] = RigidRobot.symbolicState(N);
             else
                 q = zeros(N,1);
                 qd = zeros(N,1);
                 qdd = zeros(N,1);
             end
-            qsym  = Manipulator.symbolicState(N); % for jacobian/ should also appear in DH
+            qsym  = RigidRobot.symbolicState(N); % for jacobian/ should also appear in DH
             
             state.q = q;
             state.qd = qd;
@@ -102,7 +102,7 @@ classdef Manipulator < RigidRobot
                 % get parameters
                 dh_table = obj.DHParameters;
                 N = obj.DegreeOfFreedom; % might change this
-                [q,~,~] = obj.symbolicState(N);
+                [q,~,~] = RigidRobot.symbolicState(N);
                 T_intermediate = zeros(4,4,N);
                 for i = 1:N
                     T = eye(4);
@@ -220,7 +220,7 @@ end
             % in the future, should take an ID of rigid body, and fixed
             % transformation and return linear Jacobian to the point
             N = obj.DegreeOfFreedom;
-            [q,~,~] = obj.symbolicState(N);
+            [q,~,~] = RigidRobot.symbolicState(N);
             p = obj.ForwardKinematicsCOM(i);
             J_v = simplify(jacobian(p,q));
             
@@ -391,20 +391,6 @@ end
             
             T = [R p;...
                 zeros(1,3) 1];
-        end
-        function [q,qd,qdd] = symbolicState(N)
-            % TO DO :
-            % http://www.mathworks.com/matlabcentral/answers/
-            % 242-how-to-generate-symbolic-variables-dynamically-at-run-time
-
-            q = sym('q',[N 1]);
-            qd = sym('qd',[N 1]);
-            qdd = sym('qdd',[N 1]);
-            
-            assume(q,'real');
-            assume(qd,'real');
-            assume(qdd,'real');
-            
         end
     end
 end
