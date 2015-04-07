@@ -1,4 +1,4 @@
-classdef Joint
+classdef Joint < handle
     
     properties
         Type;     % revolute/ prismatic

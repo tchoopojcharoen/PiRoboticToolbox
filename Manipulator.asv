@@ -115,25 +115,56 @@ classdef Manipulator < handle
             %return nxn generalized inertia matrix
             
             N = obj.degreeOfFreedom;
-             
+            
+            % get parameters
             if obj.Environment.IsSym
-                D = sym(zeros(N));    
+                m = sym(zeros(1,N));
+                I = sym(zeros(3,3,N));
+                J_v = sym(zeros(3,N,N));
+                J_w = sym(zeros(3,N,N));
+                R = sym(zeros(3,3,N));
+                
             else
-                D = zeros(N);
+                m = zeros(1,N);
+                I = zeros(3,3,N);
+                J_v = zeros(3,N,N);
+                J_w = zeros(3,N,N);
+                R = zeros(3,3,N);
             end
             
             listID = obj.LinkList.getListLinkID;
             numLink = numel(listID);
             for i = 1:numLink-1, % not including base/ ground
-                
-                % get parameters
                 link = obj.LinkList.getChildByID(listID{i+1});
                 body = link.Body;
-                D_i = body.generalizedInertiaMatrix;
-                D = D + D_i;
+                m(i) = body.Mass;
+                I(:,:,i) = body.Inertia;
+                pose = body.Pose;
+                R(:,:,i) = pose.Rotation;
+                J = body.Jacobian;
+                J_v(:,:,i) = J.Linear;
+                J_w(:,:,i) = J.Angular;
+                
+                linear_term = m(i)*(J_v(:,:,i)')*J_v();
+                angular_term = J_w'*R*I(:,:,i)*R'*J_w;
+                D = D + linear_term + angular_term;
                 
             end
             
+            
+            if obj.Environment.IsSym
+                D = sym(zeros(N));
+            else
+                D = zeros(N);
+            end
+            
+            % for each rigid body in the system
+            
+            for i = 1:N
+                linear_term = m(i)*(J_v(:,:,i)')*J_v();
+                angular_term = J_w'*R*I(:,:,i)*R'*J_w;
+                D = D + linear_term + angular_term;
+            end
             if obj.Environment.IsSym
                 D = simplify(D);
             else
