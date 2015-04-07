@@ -2,6 +2,7 @@ classdef Joint < handle
     
     properties
         Type;     % revolute/ prismatic
+        DegreeOfFreedom;
         BaseLink; % name / ID of the base link
         FollowerLink; % name / ID of the follower link
 %         Axis % axis of actuation
@@ -12,8 +13,9 @@ classdef Joint < handle
     end
     
     methods
-        function obj = Joint(type,base,follower,state,param)
+        function obj = Joint(type,DOF,base,follower,state,param)
             obj.Type = type;
+            obj.DegreeOfFreedom = DOF;
             obj.BaseLink = base;
             obj.FollowerLink = follower;
 %             obj.Axis = axis;

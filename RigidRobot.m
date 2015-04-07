@@ -65,7 +65,7 @@ classdef (Abstract) RigidRobot < handle
             % no spring for now 
             
             chain = obj.KinematicChain;
-            ID = chain.getListIDRigidBody;
+            ID = chain.getListRigidBodyID;
             V = 0;
             for i = 1:numel(ID)-1
                 body = chain.getBodyFromID(ID{i+1});

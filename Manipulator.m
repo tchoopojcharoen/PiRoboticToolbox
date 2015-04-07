@@ -39,7 +39,11 @@ classdef Manipulator < RigidRobot
                 a = DH(i,3);
                 alpha = DH(i,4);
                 T = Manipulator.DHtransform(theta,d,a,alpha,isSym);
-                
+                R = T(1:3,1:3);
+                p = T(1:3,4);
+                pose.Rotation = R;
+                pose.Translation = p;
+                pose.Total = T;
                 % single state
                 tempState.q = state.q(i);
                 tempState.qd = state.qd(i);
@@ -47,18 +51,19 @@ classdef Manipulator < RigidRobot
                 
                 % body
                 % undetermined pose and jacobian
-                pose = {};
+                tempPose = {};
                 J = {};
-                body = RigidBody(currentLink,mass(i),centerOfMass(:,i),inertia(:,:,i),pose,J);
+                body = RigidBody(currentLink,mass(i),centerOfMass(:,i),inertia(:,:,i),tempPose,J);
                 
                 % joint
                 jointParam.stiffness = 0; % for now
                 jointParam.damping = 0; % for now
+                jointDOF = 1;
 
-                joint = Joint(rho(i),parent,currentLink,tempState,jointParam);
+                joint = Joint(rho(i),jointDOF,parent,currentLink,tempState,jointParam);
                 
                 % add link
-                tree.addLink(parent,body,joint,T);
+                tree.addLink(parent,body,joint,pose);
                 
                 parent = currentLink;
             end
@@ -213,7 +218,7 @@ end
             p = T(1:3,4);
             p = simplify(p);
         end
-        function J_v = linearJacobianCOM(obj,i)
+        function J_v = linearJacobianCOM(obj,i) % this method should belong to KinematicChain
             %return 3xn linear Jacobian matrix at the center of mass of ith link
             
             % TO DO:

@@ -15,7 +15,7 @@ classdef LinkTree < handle
         % LinkTree('name') constructs empty linktree with no transform
         % LinkTree('name',[],tf) constructs empty linktree with transform
         % Otherwise, all arguments must be supplied as shown
-        function obj = LinkTree(parent,body,joint,T)
+        function obj = LinkTree(parent,body,joint,T) % T ->pose
             
             if nargin==0
                 obj.Transform = eye(4);
