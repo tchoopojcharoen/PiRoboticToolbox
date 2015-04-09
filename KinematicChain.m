@@ -20,6 +20,27 @@ classdef KinematicChain < handle
             DOF = 6*(numBody-1-numJoint)+sum(listJointDOF);
             
         end
+        function T = forwardKinematic(obj,ID,varargin)
+            % chain.forwardKinematic(ID) given ID of a rigid body, return 
+            % the position of center of mass and orientation of a rigid body 
+            % (Pose object) with specified ID w.r.t ground
+            % chain.forwardKinematic(ID,T) return Pose of a frame that
+            % attach to a rigid with given ID. The transformation from the
+            % center of mass and the frame is T
+            
+            % ex: given position vectorof a point p w.r.t the attached frame, the
+            % position of the point w.r.t thet center of mass can be
+            % calculuated by  T*p
+            if isempty(varargin)
+                T_atttached = eye(4);
+            else
+                T_atttached = varargin{1};
+            end
+            
+            % TO DO: implement using direct acyclic graph
+            
+            cm = 1;
+        end
         function listBodyID = getListRigidBodyID(obj,varargin)
             listBodyID = getListLinkID(obj.Tree,varargin);
         end
